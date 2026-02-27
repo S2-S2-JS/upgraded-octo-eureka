@@ -10,10 +10,37 @@
         .blue-point { color: #0056b3; }
         .bg-blue-point { background-color: #0056b3; }
         .bg-blue-point:hover { background-color: #004494; }
-        .slot-card { border: 1px solid #dee2e6; border-radius: 8px; transition: all 0.2s; }
-        .slot-card:hover { border-color: #0056b3; box-shadow: 0 2px 8px rgba(0, 86, 179, 0.1); }
-        input, select { border: 1px solid #ced4da; border-radius: 4px; padding: 4px 8px; outline: none; }
-        input:focus, select:focus { border-color: #0056b3; }
+        
+        /* 슬롯 카드 스타일 */
+        .slot-card { border: 1px solid #dee2e6; border-radius: 12px; transition: all 0.2s; background: white; }
+        .slot-card:hover { border-color: #0056b3; box-shadow: 0 4px 12px rgba(0, 86, 179, 0.08); }
+        
+        /* 입력창 스타일 */
+        input { border: 1px solid #ced4da; border-radius: 6px; padding: 6px 10px; outline: none; transition: all 0.2s; }
+        input:focus { border-color: #0056b3; ring: 2px rgba(0, 86, 179, 0.2); }
+
+        /* 버튼 그룹 스타일 */
+        .btn-group button { 
+            border: 1px solid #dee2e6; 
+            padding: 6px 12px; 
+            font-size: 0.875rem; 
+            font-weight: 600; 
+            transition: all 0.2s; 
+            background: #f8f9fa;
+            color: #495057;
+        }
+        .btn-group button:first-child { border-radius: 6px 0 0 6px; }
+        .btn-group button:last-child { border-radius: 0 6px 6px 0; }
+        .btn-group button:not(:first-child) { border-left: none; }
+        
+        /* 선택된 버튼 상태 */
+        .btn-group button.active {
+            background-color: #0056b3;
+            border-color: #0056b3;
+            color: white;
+            z-index: 1;
+        }
+
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #0056b3; border-radius: 4px; }
@@ -21,80 +48,108 @@
 </head>
 <body class="p-4 md:p-8">
 
-    <div class="max-w-5xl mx-auto">
+    <div class="max-w-6xl mx-auto">
         <!-- 헤더 -->
-        <header class="bg-blue-point text-white p-6 rounded-xl shadow-lg mb-8 text-center">
-            <h1 class="text-3xl font-bold tracking-tight">⚔️ 전투 시뮬레이터 (BATTLE SIMULATOR)</h1>
-            <p class="mt-2 text-blue-100 opacity-80">웹 브라우저 기반 실시간 전투 분석 시스템</p>
+        <header class="bg-blue-point text-white p-8 rounded-2xl shadow-lg mb-8 text-center">
+            <h1 class="text-3xl font-bold tracking-tight">⚔️ 전투 시뮬레이터</h1>
         </header>
 
         <!-- 제어 바 -->
-        <div class="flex flex-wrap gap-3 mb-6 justify-between items-center bg-gray-50 p-4 rounded-lg">
+        <div class="flex flex-wrap gap-4 mb-8 justify-between items-center bg-gray-50 p-5 rounded-xl border border-gray-100">
             <div class="flex gap-3">
-                <button onclick="randomFill()" class="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-100 transition">🎲 랜덤 생성</button>
-                <button onclick="resetAll()" class="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-100 transition text-red-500">🧹 초기화</button>
+                <button onclick="randomFill()" class="px-5 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-100 font-medium transition flex items-center">
+                    <span class="mr-2">🎲</span> 랜덤 생성
+                </button>
+                <button onclick="resetAll()" class="px-5 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-100 font-medium transition text-red-500 flex items-center">
+                    <span class="mr-2">🧹</span> 초기화
+                </button>
             </div>
-            <button onclick="runSimulation()" class="px-8 py-3 bg-blue-point text-white font-bold rounded-md shadow-md transition transform active:scale-95">🚀 시뮬레이션 시작</button>
+            <button onclick="runSimulation()" class="px-10 py-3 bg-blue-point text-white font-bold text-lg rounded-lg shadow-md hover:shadow-lg transition transform active:scale-95 flex items-center">
+                🚀 시뮬레이션 시작
+            </button>
         </div>
 
         <!-- 유닛 입력 슬롯 그리드 -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8" id="slot-container">
-            <!-- JavaScript로 슬롯 12개 생성됨 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10" id="slot-container">
+            <!-- JavaScript로 슬롯 12개 생성 -->
         </div>
 
         <!-- 결과 리포트 영역 -->
-        <div class="mt-8">
-            <h2 class="text-xl font-bold mb-4 blue-point flex items-center">
-                <span class="mr-2">📊</span> 결과 분석 리포트
+        <div class="mt-10">
+            <h2 class="text-2xl font-bold mb-5 blue-point flex items-center">
+                <span class="mr-3">📊</span> 결과 분석 리포트
             </h2>
-            <div id="result-log" class="w-full h-80 bg-gray-900 text-green-400 p-6 rounded-xl font-mono text-sm overflow-y-auto whitespace-pre-wrap border-4 border-gray-800 shadow-inner">
+            <div id="result-log" class="w-full h-96 bg-gray-900 text-green-400 p-8 rounded-2xl font-mono text-sm overflow-y-auto whitespace-pre-wrap border-8 border-gray-800 shadow-2xl">
 시뮬레이션 대기 중... 유닛을 설정하고 시작 버튼을 눌러주세요.
             </div>
         </div>
     </div>
 
     <script>
-        // --- 1. 유닛 슬롯 생성 ---
         const container = document.getElementById('slot-container');
-        const slots = [];
+        const unitData = {}; // 각 슬롯의 선택 상태 저장
 
+        // --- 1. 유닛 슬롯 생성 함수 ---
         for (let i = 1; i <= 12; i++) {
+            unitData[i] = { pos: null, side: null };
             const div = document.createElement('div');
-            div.className = 'slot-card p-4 flex flex-col space-y-3 bg-white';
+            div.className = 'slot-card p-5 flex flex-col space-y-4';
             div.innerHTML = `
-                <div class="flex items-center justify-between border-b pb-2 mb-2">
-                    <span class="font-bold blue-point">No. ${String(i).padStart(2, '0')}</span>
-                    <input type="text" placeholder="이름 입력" class="unit-name w-1/2 font-semibold" id="name-${i}">
+                <div class="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <span class="font-bold text-lg blue-point">#${String(i).padStart(2, '0')}</span>
+                    <input type="text" placeholder="이름 입력" class="unit-name w-40 text-sm font-bold text-right border-none bg-transparent hover:bg-gray-50 focus:bg-white p-1" id="name-${i}">
                 </div>
-                <div class="grid grid-cols-2 gap-2 text-sm">
-                    <div class="flex flex-col">
-                        <label class="text-gray-500 mb-1">역할</label>
-                        <select class="unit-pos" id="pos-${i}">
-                            <option value="">선택</option>
-                            <option value="T">T (탱커)</option>
-                            <option value="D">D (딜러)</option>
-                            <option value="S">S (서포터)</option>
-                        </select>
+                
+                <div class="space-y-3">
+                    <!-- 역할 선택 버튼 그룹 -->
+                    <div>
+                        <label class="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-2">포지션</label>
+                        <div class="btn-group flex w-full" id="group-pos-${i}">
+                            <button type="button" class="flex-1" onclick="setOption(${i}, 'pos', 'T')">T</button>
+                            <button type="button" class="flex-1" onclick="setOption(${i}, 'pos', 'D')">D</button>
+                            <button type="button" class="flex-1" onclick="setOption(${i}, 'pos', 'S')">S</button>
+                        </div>
                     </div>
-                    <div class="flex flex-col">
-                        <label class="text-gray-500 mb-1">진영</label>
-                        <select class="unit-side" id="side-${i}">
-                            <option value="">선택</option>
-                            <option value="Attack">Attack (공성)</option>
-                            <option value="Defense">Defense (수성)</option>
-                        </select>
+
+                    <!-- 진영 선택 버튼 그룹 -->
+                    <div>
+                        <label class="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-2">진영</label>
+                        <div class="btn-group flex w-full" id="group-side-${i}">
+                            <button type="button" class="flex-1 text-xs" onclick="setOption(${i}, 'side', 'Attack')">ATTACK</button>
+                            <button type="button" class="flex-1 text-xs" onclick="setOption(${i}, 'side', 'Defense')">DEFENSE</button>
+                        </div>
                     </div>
-                </div>
-                <div class="flex flex-col text-sm">
-                    <label class="text-gray-500 mb-1">기초 HP</label>
-                    <input type="number" value="100" class="unit-hp" id="hp-${i}">
+
+                    <!-- HP 입력 -->
+                    <div class="flex items-center justify-between pt-2">
+                        <label class="text-xs font-bold text-gray-400 uppercase tracking-wider">체력</label>
+                        <input type="number" value="100" class="w-20 text-center text-sm font-bold" id="hp-${i}">
+                    </div>
                 </div>
             `;
             container.appendChild(div);
-            slots.push(i);
         }
 
-        // --- 2. 시뮬레이션 로직 ---
+        // --- 2. 버튼 선택 처리 함수 ---
+        function setOption(slotId, type, value) {
+            // 데이터 업데이트
+            unitData[slotId][type] = value;
+
+            // UI 업데이트
+            const group = document.getElementById(`group-${type}-${slotId}`);
+            const buttons = group.querySelectorAll('button');
+            
+            buttons.forEach(btn => {
+                const btnValue = type === 'pos' ? btn.innerText : (btn.innerText === 'ATTACK' ? 'Attack' : 'Defense');
+                if (btnValue === value) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+        }
+
+        // --- 3. 주사위 및 로직 ---
         function roll(diceStr, modifier = 0) {
             if (!diceStr.includes('d')) return parseInt(diceStr) + modifier;
             const [num, sides] = diceStr.split('d').map(Number);
@@ -119,14 +174,15 @@
             }
         }
 
+        // --- 4. 시뮬레이션 실행 ---
         function runSimulation() {
             const attackUnits = [];
             const defenseUnits = [];
 
             for (let i = 1; i <= 12; i++) {
                 const name = document.getElementById(`name-${i}`).value.trim();
-                const pos = document.getElementById(`pos-${i}`).value;
-                const side = document.getElementById(`side-${i}`).value;
+                const pos = unitData[i].pos;
+                const side = unitData[i].side;
                 const hp = parseInt(document.getElementById(`hp-${i}`).value);
 
                 if (name && pos && side && !isNaN(hp)) {
@@ -137,15 +193,14 @@
             }
 
             if (attackUnits.length === 0 || defenseUnits.length === 0) {
-                alert("공성측과 수성측에 각각 최소 1명 이상의 유닛을 설정해 주세요.");
+                alert("공성(Attack)과 수성(Defense) 진영에 각각 최소 1명 이상의 유닛 이름과 설정을 입력해 주세요.");
                 return;
             }
 
-            // 전투 구역 데이터
             let turretHp = 200;
             let turretDestroyedRound = null;
             const logArea = document.getElementById('result-log');
-            logArea.innerText = "전투 연산 중...\n";
+            logArea.innerText = "데이터 분석 중...\n";
 
             for (let r = 1; r <= 12; r++) {
                 if (attackUnits.filter(u => u.isAlive).length === 0) break;
@@ -153,14 +208,14 @@
 
                 const isDestroyed = turretHp <= 0;
 
-                // Step 1: 보호막
+                // Step 1: 보호막 생성
                 [...attackUnits, ...defenseUnits].forEach(u => {
                     if (!u.isAlive || u.pos !== 'T') return;
                     if (u.side === "Attack") u.shield += roll('5d6', 10);
                     else if (u.side === "Defense" && isDestroyed) u.shield += roll('5d6');
                 });
 
-                // Step 2: 행동 순서
+                // Step 2: 무작위 행동
                 let allActive = [...attackUnits, ...defenseUnits].filter(u => u.isAlive);
                 allActive.sort(() => Math.random() - 0.5);
 
@@ -226,25 +281,30 @@
                 });
             }
 
-            // 결과 리포트 출력
-            let report = `===== 전투 시뮬레이션 결과 =====\n`;
-            report += `● 포탑 상태: ${turretHp <= 0 ? `파괴 (라운드: ${turretDestroyedRound}R)` : `생존 (HP: ${turretHp})`}\n`;
-            report += `-`.repeat(40) + `\n`;
+            let report = `===== 전투 시뮬레이션 최종 보고서 =====\n`;
+            report += `▶ 포탑 상태: ${turretHp <= 0 ? `완전 파괴 (${turretDestroyedRound}R)` : `가동 중 (HP: ${turretHp})`}\n`;
+            report += `----------------------------------------\n`;
             [...attackUnits, ...defenseUnits].forEach(u => {
                 const side = u.side === "Attack" ? "공성" : "수성";
-                const status = u.isAlive ? `생존 (HP: ${u.hp})` : `사망 (${u.deathRound}R)`;
-                report += `[${side}] ${u.name.padEnd(8)} (${u.pos}): ${status}\n`;
+                const status = u.isAlive ? `생존 (HP: ${u.hp})` : `전사 (${u.deathRound}R)`;
+                report += `[${side}] ${u.name.padEnd(10)} (${u.pos}): ${status}\n`;
             });
 
             logArea.innerText = report;
         }
 
+        // --- 5. 유틸리티 함수 (랜덤/초기화) ---
         function randomFill() {
-            const names = ["1", "2", "3", "4", "5", "6", "7", "8"];
+            const names = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
             for (let i = 1; i <= 12; i++) {
                 document.getElementById(`name-${i}`).value = names[Math.floor(Math.random() * names.length)] + Math.floor(Math.random() * 99);
-                document.getElementById(`pos-${i}`).value = ["T", "D", "S"][Math.floor(Math.random() * 3)];
-                document.getElementById(`side-${i}`).value = ["Attack", "Defense"][Math.floor(Math.random() * 2)];
+                
+                const randPos = ["T", "D", "S"][Math.floor(Math.random() * 3)];
+                const randSide = ["Attack", "Defense"][Math.floor(Math.random() * 2)];
+                
+                setOption(i, 'pos', randPos);
+                setOption(i, 'side', randSide);
+                
                 document.getElementById(`hp-${i}`).value = Math.floor(Math.random() * 100) + 100;
             }
         }
@@ -252,9 +312,12 @@
         function resetAll() {
             for (let i = 1; i <= 12; i++) {
                 document.getElementById(`name-${i}`).value = "";
-                document.getElementById(`pos-${i}`).value = "";
-                document.getElementById(`side-${i}`).value = "";
                 document.getElementById(`hp-${i}`).value = "100";
+                unitData[i] = { pos: null, side: null };
+                
+                // 버튼 UI 초기화
+                const groups = [document.getElementById(`group-pos-${i}`), document.getElementById(`group-side-${i}`)];
+                groups.forEach(g => g.querySelectorAll('button').forEach(b => b.classList.remove('active')));
             }
             document.getElementById('result-log').innerText = "시뮬레이션 대기 중...";
         }
