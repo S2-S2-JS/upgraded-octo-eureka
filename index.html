@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>전투 시뮬레이터 (Battle Simulator)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #ffffff; color: #333; font-family: 'Pretendard', 'Malgun Gothic', sans-serif; }
+        .blue-point { color: #0056b3; }
+        .bg-blue-point { background-color: #0056b3; }
+        .bg-blue-point:hover { background-color: #004494; }
+        .slot-card { border: 1px solid #dee2e6; border-radius: 8px; transition: all 0.2s; }
+        .slot-card:hover { border-color: #0056b3; box-shadow: 0 2px 8px rgba(0, 86, 179, 0.1); }
+        input, select { border: 1px solid #ced4da; border-radius: 4px; padding: 4px 8px; outline: none; }
+        input:focus, select:focus { border-color: #0056b3; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #0056b3; border-radius: 4px; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-5xl mx-auto">
+        <!-- 헤더 -->
+        <header class="bg-blue-point text-white p-6 rounded-xl shadow-lg mb-8 text-center">
+            <h1 class="text-3xl font-bold tracking-tight">⚔️ 전투 시뮬레이터 (BATTLE SIMULATOR)</h1>
+            <p class="mt-2 text-blue-100 opacity-80">웹 브라우저 기반 실시간 전투 분석 시스템</p>
+        </header>
+
+        <!-- 제어 바 -->
+        <div class="flex flex-wrap gap-3 mb-6 justify-between items-center bg-gray-50 p-4 rounded-lg">
+            <div class="flex gap-3">
+                <button onclick="randomFill()" class="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-100 transition">🎲 랜덤 생성</button>
+                <button onclick="resetAll()" class="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-100 transition text-red-500">🧹 초기화</button>
+            </div>
+            <button onclick="runSimulation()" class="px-8 py-3 bg-blue-point text-white font-bold rounded-md shadow-md transition transform active:scale-95">🚀 시뮬레이션 시작</button>
+        </div>
+
+        <!-- 유닛 입력 슬롯 그리드 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8" id="slot-container">
+            <!-- JavaScript로 슬롯 12개 생성됨 -->
+        </div>
+
+        <!-- 결과 리포트 영역 -->
+        <div class="mt-8">
+            <h2 class="text-xl font-bold mb-4 blue-point flex items-center">
+                <span class="mr-2">📊</span> 결과 분석 리포트
+            </h2>
+            <div id="result-log" class="w-full h-80 bg-gray-900 text-green-400 p-6 rounded-xl font-mono text-sm overflow-y-auto whitespace-pre-wrap border-4 border-gray-800 shadow-inner">
+시뮬레이션 대기 중... 유닛을 설정하고 시작 버튼을 눌러주세요.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. 유닛 슬롯 생성 ---
+        const container = document.getElementById('slot-container');
+        const slots = [];
+
+        for (let i = 1; i <= 12; i++) {
+            const div = document.createElement('div');
+            div.className = 'slot-card p-4 flex flex-col space-y-3 bg-white';
+            div.innerHTML = `
+                <div class="flex items-center justify-between border-b pb-2 mb-2">
+                    <span class="font-bold blue-point">No. ${String(i).padStart(2, '0')}</span>
+                    <input type="text" placeholder="이름 입력" class="unit-name w-1/2 font-semibold" id="name-${i}">
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <div class="flex flex-col">
+                        <label class="text-gray-500 mb-1">역할</label>
+                        <select class="unit-pos" id="pos-${i}">
+                            <option value="">선택</option>
+                            <option value="T">T (탱커)</option>
+                            <option value="D">D (딜러)</option>
+                            <option value="S">S (서포터)</option>
+                        </select>
+                    </div>
+                    <div class="flex flex-col">
+                        <label class="text-gray-500 mb-1">진영</label>
+                        <select class="unit-side" id="side-${i}">
+                            <option value="">선택</option>
+                            <option value="Attack">Attack (공성)</option>
+                            <option value="Defense">Defense (수성)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex flex-col text-sm">
+                    <label class="text-gray-500 mb-1">기초 HP</label>
+                    <input type="number" value="100" class="unit-hp" id="hp-${i}">
+                </div>
+            `;
+            container.appendChild(div);
+            slots.push(i);
+        }
+
+        // --- 2. 시뮬레이션 로직 ---
+        function roll(diceStr, modifier = 0) {
+            if (!diceStr.includes('d')) return parseInt(diceStr) + modifier;
+            const [num, sides] = diceStr.split('d').map(Number);
+            let sum = 0;
+            for (let i = 0; i < num; i++) sum += Math.floor(Math.random() * sides) + 1;
+            return sum + modifier;
+        }
+
+        class Unit {
+            constructor(name, pos, side, hp, idx) {
+                this.name = name;
+                this.pos = pos;
+                this.side = side;
+                this.hp = hp;
+                this.maxHp = hp;
+                this.isAlive = true;
+                this.deathRound = null;
+                this.absorbCount = 0;
+                this.shield = 0;
+                this.pierce = false;
+                this.idx = idx;
+            }
+        }
+
+        function runSimulation() {
+            const attackUnits = [];
+            const defenseUnits = [];
+
+            for (let i = 1; i <= 12; i++) {
+                const name = document.getElementById(`name-${i}`).value.trim();
+                const pos = document.getElementById(`pos-${i}`).value;
+                const side = document.getElementById(`side-${i}`).value;
+                const hp = parseInt(document.getElementById(`hp-${i}`).value);
+
+                if (name && pos && side && !isNaN(hp)) {
+                    const unit = new Unit(name, pos, side, hp, i);
+                    if (side === "Attack") attackUnits.push(unit);
+                    else defenseUnits.push(unit);
+                }
+            }
+
+            if (attackUnits.length === 0 || defenseUnits.length === 0) {
+                alert("공성측과 수성측에 각각 최소 1명 이상의 유닛을 설정해 주세요.");
+                return;
+            }
+
+            // 전투 구역 데이터
+            let turretHp = 200;
+            let turretDestroyedRound = null;
+            const logArea = document.getElementById('result-log');
+            logArea.innerText = "전투 연산 중...\n";
+
+            for (let r = 1; r <= 12; r++) {
+                if (attackUnits.filter(u => u.isAlive).length === 0) break;
+                if (defenseUnits.filter(u => u.isAlive).length === 0 && turretHp <= 0) break;
+
+                const isDestroyed = turretHp <= 0;
+
+                // Step 1: 보호막
+                [...attackUnits, ...defenseUnits].forEach(u => {
+                    if (!u.isAlive || u.pos !== 'T') return;
+                    if (u.side === "Attack") u.shield += roll('5d6', 10);
+                    else if (u.side === "Defense" && isDestroyed) u.shield += roll('5d6');
+                });
+
+                // Step 2: 행동 순서
+                let allActive = [...attackUnits, ...defenseUnits].filter(u => u.isAlive);
+                allActive.sort(() => Math.random() - 0.5);
+
+                allActive.forEach(u => {
+                    if (!u.isAlive) return;
+                    const myTeam = u.side === "Attack" ? attackUnits : defenseUnits;
+                    const oppTeam = u.side === "Attack" ? defenseUnits : attackUnits;
+                    const myTank = myTeam.find(t => t.isAlive && t.pos === 'T');
+                    const oppTank = oppTeam.find(t => t.isAlive && t.pos === 'T');
+                    const oppSupporter = oppTeam.find(s => s.isAlive && s.pos === 'S');
+
+                    const getTarget = (team) => {
+                        const alive = team.filter(t => t.isAlive);
+                        const order = { 'T': 0, 'S': 1, 'D': 2 };
+                        return alive.sort((a, b) => order[a.pos] - order[b.pos])[0];
+                    };
+
+                    if (u.pos === 'D') {
+                        if (u.side === "Attack" && !isDestroyed) {
+                            let dmg = roll('8d3', 5);
+                            let mainDefTank = defenseUnits.find(t => t.isAlive && t.pos === 'T' && t.absorbCount < 2);
+                            if (mainDefTank) { mainDefTank.hp -= dmg; mainDefTank.absorbCount++; }
+                            else { turretHp -= dmg; }
+                        } else if (isDestroyed) {
+                            if (myTank && oppSupporter && !u.pierce) {
+                                oppSupporter.hp -= roll('8d3', u.side === "Attack" ? 5 : 0);
+                                u.pierce = true;
+                            }
+                            if (myTank && myTank.hp < 80) myTank.shield += roll('5d2');
+                            else {
+                                let target = oppTank || getTarget(oppTeam);
+                                if (target) target.hp -= (roll('8d3', u.side === "Attack" ? 5 : 0) - (target.shield || 0));
+                            }
+                        } else if (u.side === "Defense") {
+                            let target = getTarget(oppTeam);
+                            if (target) target.hp -= (roll('8d3') - (target.shield || 0));
+                        }
+                    } else if (u.pos === 'S') {
+                        if (u.side === "Defense" && !isDestroyed) {
+                            turretHp = Math.min(200, turretHp + roll('5d4'));
+                        } else {
+                            let hTarget = myTank || u;
+                            hTarget.hp = Math.min(hTarget.maxHp, hTarget.hp + roll('5d4'));
+                        }
+                    } else if (u.pos === 'T' && u.side === "Defense" && !isDestroyed) {
+                        let target = getTarget(oppTeam);
+                        if (target) target.hp -= (roll('4d5') - (target.shield || 0));
+                    }
+                });
+
+                if (turretHp <= 0 && turretDestroyedRound === null) {
+                    turretHp = 0; turretDestroyedRound = r;
+                    defenseUnits.forEach(d => { if(d.isAlive) d.hp -= 20; });
+                }
+
+                if (turretHp > 0 && r % 2 === 0) {
+                    attackUnits.forEach(a => { if(a.isAlive) a.hp -= 7; });
+                }
+
+                [...attackUnits, ...defenseUnits].forEach(u => {
+                    if (u.isAlive && u.hp <= 0) { u.hp = 0; u.isAlive = false; u.deathRound = r; }
+                    u.shield = 0;
+                });
+            }
+
+            // 결과 리포트 출력
+            let report = `===== 전투 시뮬레이션 결과 =====\n`;
+            report += `● 포탑 상태: ${turretHp <= 0 ? `파괴 (라운드: ${turretDestroyedRound}R)` : `생존 (HP: ${turretHp})`}\n`;
+            report += `-`.repeat(40) + `\n`;
+            [...attackUnits, ...defenseUnits].forEach(u => {
+                const side = u.side === "Attack" ? "공성" : "수성";
+                const status = u.isAlive ? `생존 (HP: ${u.hp})` : `사망 (${u.deathRound}R)`;
+                report += `[${side}] ${u.name.padEnd(8)} (${u.pos}): ${status}\n`;
+            });
+
+            logArea.innerText = report;
+        }
+
+        function randomFill() {
+            const names = ["1", "2", "3", "4", "5", "6", "7", "8"];
+            for (let i = 1; i <= 12; i++) {
+                document.getElementById(`name-${i}`).value = names[Math.floor(Math.random() * names.length)] + Math.floor(Math.random() * 99);
+                document.getElementById(`pos-${i}`).value = ["T", "D", "S"][Math.floor(Math.random() * 3)];
+                document.getElementById(`side-${i}`).value = ["Attack", "Defense"][Math.floor(Math.random() * 2)];
+                document.getElementById(`hp-${i}`).value = Math.floor(Math.random() * 100) + 100;
+            }
+        }
+
+        function resetAll() {
+            for (let i = 1; i <= 12; i++) {
+                document.getElementById(`name-${i}`).value = "";
+                document.getElementById(`pos-${i}`).value = "";
+                document.getElementById(`side-${i}`).value = "";
+                document.getElementById(`hp-${i}`).value = "100";
+            }
+            document.getElementById('result-log').innerText = "시뮬레이션 대기 중...";
+        }
+    </script>
+</body>
+</html>
