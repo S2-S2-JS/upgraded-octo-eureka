@@ -1,0 +1,337 @@
+import tkinter as tk
+from tkinter import ttk, messagebox, scrolledtext
+import random
+
+# ==========================================
+# 1. 시뮬레이션 코어 로직 (전투 엔진)
+# ==========================================
+
+def roll(dice_str, modifier=0):
+    """주사위 굴림 계산 함수 (예: '8d3')"""
+    try:
+        if 'd' not in dice_str:
+            return int(dice_str) + modifier
+        num, sides = map(int, dice_str.split('d'))
+        return sum(random.randint(1, sides) for _ in range(num)) + modifier
+    except:
+        return 0
+
+class Unit:
+    """전투 단위 객체"""
+    def __init__(self, name, pos, side, hp, idx):
+        self.name = name
+        self.pos = pos        # 'T' (탱커), 'D' (딜러), 'S' (서포터)
+        self.side = side      # 'Attack' (공성), 'Defense' (수성)
+        self.hp = hp
+        self.max_hp = hp
+        self.is_alive = True
+        self.death_round = None
+        self.absorb_count = 0 # 수성 탱커 특수 기믹용
+        self.shield = 0       
+        self.pierce = False   # 관통 공격 사용 여부
+        self.idx = idx
+
+class Zone:
+    """전투 구역 및 시뮬레이션 엔진"""
+    def __init__(self, name, attack_units, defense_units):
+        self.name = name
+        self.turret_hp = 200
+        self.turret_max_hp = 200
+        self.turret_destroyed_round = None
+        self.attack = attack_units
+        self.defense = defense_units
+        self.log = []
+
+    def get_priority_target(self, units):
+        """공격 우선순위에 따른 대상 선정"""
+        alive_units = [u for u in units if u.is_alive]
+        if not alive_units: return None
+        # 우선순위: 탱커(T) -> 서포터(S) -> 딜러(D)
+        pos_order = {'T': 0, 'S': 1, 'D': 2}
+        sorted_targets = sorted(alive_units, key=lambda x: (pos_order.get(x.pos, 3), x.idx))
+        return sorted_targets[0]
+
+    def deal_damage(self, target, dmg, pierce=False):
+        """데미지 처리 (보호막 우선 차감)"""
+        if not target or not target.is_alive: return
+        if pierce:
+            target.hp -= dmg
+        else:
+            if target.shield >= dmg:
+                target.shield -= dmg
+            else:
+                remaining_dmg = dmg - target.shield
+                target.shield = 0
+                target.hp -= remaining_dmg
+
+    def run_battle(self):
+        """12라운드 전투 시뮬레이션 실행"""
+        for r in range(1, 13):
+            # 승패 판정
+            if not any(u.is_alive for u in self.attack): break
+            if not any(u.is_alive for u in self.defense) and self.turret_hp <= 0: break
+            
+            is_destroyed = self.turret_hp <= 0
+
+            # [Step 1] 방어 준비 (탱커 보호막 생성)
+            for u in [u for u in self.attack + self.defense if u.is_alive and u.pos == 'T']:
+                if u.side == "Attack":
+                    u.shield += roll('5d6', 10)
+                elif u.side == "Defense" and is_destroyed:
+                    u.shield += roll('5d6')
+
+            # [Step 2] 유닛 행동 순서 (랜덤)
+            all_units = self.attack + self.defense
+            random.shuffle(all_units)
+            
+            for u in all_units:
+                if not u.is_alive: continue
+
+                is_atk = (u.side == "Attack")
+                my_team = self.attack if is_atk else self.defense
+                opp_team = self.defense if is_atk else self.attack
+                
+                my_tank = next((t for t in my_team if t.is_alive and t.pos == 'T'), None)
+                opp_tank = next((t for t in opp_team if t.is_alive and t.pos == 'T'), None)
+                opp_supporter = next((s for s in opp_team if s.is_alive and s.pos == 'S'), None)
+
+                # [딜러 행동]
+                if u.pos == 'D':
+                    if not is_destroyed and is_atk:
+                        # 포탑 파괴 전 공성 딜러: 포탑 공격 (탱커가 2회까지 흡수 가능)
+                        dmg = roll('8d3', 5)
+                        main_def_tank = next((t for t in self.defense if t.is_alive and t.pos == 'T' and t.absorb_count < 2), None)
+                        if main_def_tank:
+                            main_def_tank.hp -= dmg
+                            main_def_tank.absorb_count += 1
+                        else:
+                            self.turret_hp -= dmg
+                    elif is_destroyed:
+                        # 포탑 파괴 후 행동
+                        if my_tank and opp_supporter and not u.pierce:
+                            self.deal_damage(opp_supporter, roll('8d3', 5 if is_atk else 0))
+                            u.pierce = True
+                        if my_tank and my_tank.hp < 80:
+                            my_tank.shield += roll('5d2')
+                        else:
+                            target = opp_tank if opp_tank else self.get_priority_target(opp_team)
+                            self.deal_damage(target, roll('8d3', 5 if is_atk else 0))
+                    else:
+                        # 수성 딜러 일반 공격
+                        self.deal_damage(self.get_priority_target(opp_team), roll('8d3'))
+
+                # [서포터 행동]
+                elif u.pos == 'S':
+                    if not is_atk and not is_destroyed:
+                        # 수성 서포터: 포탑 수리
+                        self.turret_hp = min(self.turret_max_hp, self.turret_hp + roll('5d4'))
+                    else:
+                        # 아군 탱커 혹은 자가 치료
+                        heal_target = my_tank if (my_tank and my_tank.is_alive) else u
+                        heal_target.hp = min(heal_target.max_hp, heal_target.hp + roll('5d4'))
+
+                # [탱커 행동]
+                elif u.pos == 'T':
+                    if not is_destroyed and not is_atk:
+                        self.deal_damage(self.get_priority_target(opp_team), roll('4d5'))
+
+            # 포탑 파괴 판정
+            if self.turret_hp <= 0 and self.turret_destroyed_round is None:
+                self.turret_hp, self.turret_destroyed_round = 0, r
+                for d in self.defense: d.hp -= 20 # 파괴 후폭풍 피해
+
+            # [Step 3] 환경 피해 (매 2라운드)
+            if self.turret_hp > 0 and r % 2 == 0:
+                for a in [a for a in self.attack if a.is_alive]:
+                    self.deal_damage(a, 7)
+
+            # 사망 확인
+            for unit in self.attack + self.defense:
+                if unit.is_alive and unit.hp <= 0:
+                    unit.hp, unit.is_alive, unit.death_round = 0, False, r
+                unit.shield = 0 # 라운드 종료 시 보호막 초기화
+
+    def get_final_report(self):
+        """결과 텍스트 생성"""
+        report = []
+        report.append(f"===== [{self.name}] 전투 결과 =====")
+        t_res = f"파괴 (라운드: {self.turret_destroyed_round}R)" if self.turret_hp <= 0 else f"생존 (현재 HP: {self.turret_hp})"
+        report.append(f"● 포탑 상태: {t_res}")
+        report.append("-" * 50)
+        for u in self.attack + self.defense:
+            side = "공성" if u.side == "Attack" else "수성"
+            status = f"생존 (HP: {u.hp})" if u.is_alive else f"사망 ({u.death_round}R)"
+            report.append(f"[{side}] {u.name:<8} ({u.pos}): {status}")
+        return "\n".join(report)
+
+# ==========================================
+# 2. GUI 클래스 (화이트 & 블루 테마)
+# ==========================================
+
+class BattleSimulatorApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("전투 시뮬레이터 v1.0")
+        self.root.geometry("900x850")
+        self.root.configure(bg="#ffffff")
+
+        # 스타일 설정
+        self.setup_styles()
+        
+        # --- 상단 헤더 ---
+        header = tk.Frame(self.root, bg="#0056b3", height=70)
+        header.pack(fill="x")
+        tk.Label(header, text="⚔️ 전투 시뮬레이터", font=("Malgun Gothic", 18, "bold"), 
+                 bg="#0056b3", fg="white").pack(pady=20)
+
+        # --- 메인 컨테이너 ---
+        main_frame = tk.Frame(self.root, bg="#ffffff", padx=30, pady=10)
+        main_frame.pack(fill="both", expand=True)
+
+        # 제어 버튼 영역
+        ctrl_frame = tk.Frame(main_frame, bg="#ffffff")
+        ctrl_frame.pack(fill="x", pady=10)
+
+        ttk.Button(ctrl_frame, text="🎲 랜덤 생성", command=self.random_fill).pack(side="left", padx=5)
+        ttk.Button(ctrl_frame, text="🧹 초기화", command=self.clear_slots).pack(side="left", padx=5)
+        self.start_btn = ttk.Button(ctrl_frame, text="🚀 시뮬레이션 시작", style="Action.TButton", command=self.run_sim)
+        self.start_btn.pack(side="right", padx=5)
+
+        # 슬롯 리스트 헤더
+        slot_header = tk.Frame(main_frame, bg="#f1f3f5")
+        slot_header.pack(fill="x", pady=(10, 0))
+        h_labels = [("번호", 5), ("이름 입력", 18), ("역할 (T/D/S)", 12), ("진영 (공성/수성)", 15), ("기초 HP", 10)]
+        for text, w in h_labels:
+            tk.Label(slot_header, text=text, width=w, bg="#f1f3f5", font=("Malgun Gothic", 9, "bold"), anchor="w").pack(side="left", padx=5)
+
+        # --- 유닛 입력 슬롯 (Scrollable) ---
+        canvas_container = tk.Frame(main_frame, bg="#ffffff")
+        canvas_container.pack(fill="both", expand=True, pady=5)
+
+        self.canvas = tk.Canvas(canvas_container, bg="#ffffff", highlightthickness=0)
+        self.scrollbar = ttk.Scrollbar(canvas_container, orient="vertical", command=self.canvas.yview)
+        self.scrollable_frame = tk.Frame(self.canvas, bg="#ffffff")
+
+        self.scrollable_frame.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
+        self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.scrollbar.pack(side="right", fill="y")
+
+        self.slots = []
+        for i in range(1, 13): # 12개의 슬롯 생성
+            self.create_slot(i)
+
+        # --- 하단 결과 로그 창 ---
+        log_label = tk.Label(self.root, text="결과 분석 리포트", font=("Malgun Gothic", 10, "bold"), bg="#ffffff", fg="#0056b3")
+        log_label.pack(anchor="w", padx=30)
+        
+        self.result_area = scrolledtext.ScrolledText(self.root, height=10, font=("Consolas", 10), bg="#f8f9fa", relief="flat", padx=10, pady=10)
+        self.result_area.pack(fill="x", padx=30, pady=(5, 20))
+
+    def setup_styles(self):
+        style = ttk.Style()
+        style.theme_use('clam')
+        style.configure("TButton", font=("Malgun Gothic", 9))
+        style.configure("Action.TButton", background="#0056b3", foreground="white", font=("Malgun Gothic", 10, "bold"))
+        style.map("Action.TButton", background=[('active', '#004494')])
+
+    def create_slot(self, idx):
+        frame = tk.Frame(self.scrollable_frame, bg="#ffffff", pady=5)
+        frame.pack(fill="x")
+
+        # 번호
+        tk.Label(frame, text=f"{idx:02d}", width=5, fg="#0056b3", bg="#ffffff", font=("Arial", 10, "bold")).pack(side="left", padx=5)
+
+        # 이름
+        name_var = tk.StringVar()
+        name_ent = tk.Entry(frame, textvariable=name_var, width=18, relief="solid", bd=1)
+        name_ent.pack(side="left", padx=5)
+
+        # 역할 콤보박스
+        pos_combo = ttk.Combobox(frame, values=["T (탱커)", "D (딜러)", "S (서포터)"], width=12, state="readonly")
+        pos_combo.pack(side="left", padx=5)
+
+        # 진영 콤보박스
+        side_combo = ttk.Combobox(frame, values=["Attack (공성)", "Defense (수성)"], width=15, state="readonly")
+        side_combo.pack(side="left", padx=5)
+
+        # HP 입력
+        hp_var = tk.StringVar(value="100")
+        hp_ent = tk.Entry(frame, textvariable=hp_var, width=10, relief="solid", bd=1)
+        hp_ent.pack(side="left", padx=5)
+
+        # 구분선
+        tk.Frame(self.scrollable_frame, height=1, bg="#dee2e6").pack(fill="x", padx=10)
+
+        self.slots.append({
+            "name": name_var, "pos": pos_combo, "side": side_combo, "hp": hp_var
+        })
+
+    def random_fill(self):
+        names = ["용사", "마법사", "사제", "기사", "궁수", "도적", "방패병", "수호자", "저격수", "치유사"]
+        for slot in self.slots:
+            slot["name"].set(random.choice(names) + str(random.randint(1, 50)))
+            slot["pos"].set(random.choice(["T (탱커)", "D (딜러)", "S (서포터)"]))
+            slot["side"].set(random.choice(["Attack (공성)", "Defense (수성)"]))
+            slot["hp"].set(str(random.randint(100, 200)))
+
+    def clear_slots(self):
+        for slot in self.slots:
+            slot["name"].set("")
+            slot["pos"].set("")
+            slot["side"].set("")
+            slot["hp"].set("100")
+        self.result_area.delete(1.0, tk.END)
+
+    def run_sim(self):
+        attack_units = []
+        defense_units = []
+
+        try:
+            for i, slot in enumerate(self.slots):
+                name = slot["name"].get().strip()
+                if not name: continue # 이름 없으면 스킵
+
+                pos_val = slot["pos"].get()
+                if not pos_val: continue
+                pos = pos_val[0] # 'T', 'D', 'S' 중 첫 글자만 추출
+
+                side_val = slot["side"].get()
+                if not side_val: continue
+                side = "Attack" if "Attack" in side_val else "Defense"
+
+                hp = int(slot["hp"].get())
+                
+                # Unit 객체 생성
+                unit = Unit(name, pos, side, hp, i+1)
+                if side == "Attack":
+                    attack_units.append(unit)
+                else:
+                    defense_units.append(unit)
+
+            if not attack_units or not defense_units:
+                messagebox.showwarning("입력 확인", "공성측과 수성측에 각각 최소 1명 이상의 유닛을 설정해 주세요.")
+                return
+
+            # 시뮬레이션 엔진 가동
+            sim = Zone("실전 매치업", attack_units, defense_units)
+            sim.run_battle()
+            
+            # 결과 출력
+            self.result_area.delete(1.0, tk.END)
+            self.result_area.insert(tk.END, sim.get_final_report())
+            self.result_area.see(tk.END)
+
+        except ValueError:
+            messagebox.showerror("입력 오류", "체력 입력란에 숫자만 입력해 주세요.")
+
+# ==========================================
+# 3. 실행부
+# ==========================================
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = BattleSimulatorApp(root)
+    root.mainloop()
