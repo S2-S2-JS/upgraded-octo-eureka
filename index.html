@@ -211,7 +211,7 @@
                 // Step 1: 보호막 생성
                 [...attackUnits, ...defenseUnits].forEach(u => {
                     if (!u.isAlive || u.pos !== 'T') return;
-                    if (u.side === "Attack") u.shield += roll('5d6', 10);
+                    if (u.side === "Attack") u.shield += roll('5d6', 5);
                     else if (u.side === "Defense" && isDestroyed) u.shield += roll('5d6');
                 });
 
@@ -235,19 +235,19 @@
 
                     if (u.pos === 'D') {
                         if (u.side === "Attack" && !isDestroyed) {
-                            let dmg = roll('8d3', 5);
+                            let dmg = roll('8d3', 3);
                             let mainDefTank = defenseUnits.find(t => t.isAlive && t.pos === 'T' && t.absorbCount < 2);
                             if (mainDefTank) { mainDefTank.hp -= dmg; mainDefTank.absorbCount++; }
                             else { turretHp -= dmg; }
                         } else if (isDestroyed) {
                             if (myTank && oppSupporter && !u.pierce) {
-                                oppSupporter.hp -= roll('8d3', u.side === "Attack" ? 5 : 0);
+                                oppSupporter.hp -= roll('8d3', u.side === "Attack" ? 3 : 0);
                                 u.pierce = true;
                             }
                             if (myTank && myTank.hp < 80) myTank.shield += roll('5d2');
                             else {
                                 let target = oppTank || getTarget(oppTeam);
-                                if (target) target.hp -= (roll('8d3', u.side === "Attack" ? 5 : 0) - (target.shield || 0));
+                                if (target) target.hp -= (roll('8d3', u.side === "Attack" ? 3 : 0) - (target.shield || 0));
                             }
                         } else if (u.side === "Defense") {
                             let target = getTarget(oppTeam);
