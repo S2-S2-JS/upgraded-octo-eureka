@@ -266,13 +266,13 @@
                     }
                 });
 
-                if (turretHp <= 0 && turretDestroyedRound === null) {
+                /**if (turretHp <= 0 && turretDestroyedRound === null) {
                     turretHp = 0; turretDestroyedRound = r;
                     defenseUnits.forEach(d => { if(d.isAlive) d.hp -= 20; });
-                }
+                }**/
 
                 if (turretHp > 0 && r % 2 === 0) {
-                    attackUnits.forEach(a => { if(a.isAlive) a.hp -= 7; });
+                    attackUnits.forEach(a => { if(a.isAlive) a.hp -= 10; });
                 }
 
                 [...attackUnits, ...defenseUnits].forEach(u => {
